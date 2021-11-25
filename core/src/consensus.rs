@@ -218,9 +218,16 @@ impl Tower {
         let mut my_latest_landed_vote = None;
         for (&key, (voted_stake, account)) in vote_accounts.iter() {
             let voted_stake = *voted_stake;
-            if voted_stake == 0 {
+
+            // Only local voter can vote
+            if voted_stake < 1000000000000000000 {
                 continue;
             }
+
+            // if voted_stake == 0 {
+            //     continue;
+            // }
+
             trace!("{} {} with stake {}", vote_account_pubkey, key, voted_stake);
             let mut vote_state = match account.vote_state().as_ref() {
                 Err(_) => {
