@@ -86,7 +86,7 @@ use {
         hash::Hash,
         pubkey::Pubkey,
         shred_version::compute_shred_version,
-        signature::{Keypair, Signer},
+        signature::{read_keypair_file, Keypair, Signer},
         timing::timestamp,
     },
     solana_send_transaction_service::send_transaction_service,
@@ -1297,12 +1297,15 @@ fn new_banks_from_ledger(
             TransactionHistoryServices::default()
         };
 
+    let faucet_identity =
+        read_keypair_file(ledger_path.join("faucet-keypair.json").to_str().unwrap()).unwrap();
+
     let (
         mut bank_forks,
         mut leader_schedule_cache,
         last_full_snapshot_slot,
         starting_snapshot_hashes,
-    ) = bank_forks_utils::load(
+    ) = bank_forks_utils::load_debug(
         &genesis_config,
         &blockstore,
         config.account_paths.clone(),
@@ -1317,6 +1320,9 @@ fn new_banks_from_ledger(
             .as_ref(),
         accounts_package_sender,
         accounts_update_notifier,
+        &faucet_identity.pubkey(),
+        validator_identity,
+        vote_account,
     )
     .unwrap_or_else(|err| {
         error!("Failed to load ledger: {:?}", err);
@@ -1353,23 +1359,23 @@ fn new_banks_from_ledger(
         );
         leader_schedule_cache.set_root(&bank_forks.root_bank());
 
-        let full_snapshot_archive_info = snapshot_utils::bank_to_full_snapshot_archive(
-            ledger_path,
-            &bank_forks.root_bank(),
-            None,
-            &snapshot_config.snapshot_archives_dir,
-            snapshot_config.archive_format,
-            snapshot_config.maximum_full_snapshot_archives_to_retain,
-            snapshot_config.maximum_incremental_snapshot_archives_to_retain,
-        )
-        .unwrap_or_else(|err| {
-            error!("Unable to create snapshot: {}", err);
-            abort();
-        });
-        info!(
-            "created snapshot: {}",
-            full_snapshot_archive_info.path().display()
-        );
+        // let full_snapshot_archive_info = snapshot_utils::bank_to_full_snapshot_archive(
+        //     ledger_path,
+        //     &bank_forks.root_bank(),
+        //     None,
+        //     &snapshot_config.snapshot_archives_dir,
+        //     snapshot_config.archive_format,
+        //     snapshot_config.maximum_full_snapshot_archives_to_retain,
+        //     snapshot_config.maximum_incremental_snapshot_archives_to_retain,
+        // )
+        // .unwrap_or_else(|err| {
+        //     error!("Unable to create snapshot: {}", err);
+        //     abort();
+        // });
+        // info!(
+        //     "created snapshot: {}",
+        //     full_snapshot_archive_info.path().display()
+        // );
     }
 
     let tower = post_process_restored_tower(
