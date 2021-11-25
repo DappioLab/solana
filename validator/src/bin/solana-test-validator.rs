@@ -1,5 +1,5 @@
 use {
-    clap::{crate_name, value_t, value_t_or_exit, App, Arg},
+    clap::{crate_name, value_t, value_t_or_exit, values_t, App, Arg, ArgMatches},
     log::*,
     solana_clap_utils::{
         input_parsers::{pubkey_of, pubkeys_of, value_of},
@@ -12,6 +12,10 @@ use {
     solana_core::tower_storage::FileTowerStorage,
     solana_faucet::faucet::{run_local_faucet_with_port, FAUCET_PORT},
     solana_rpc::rpc::JsonRpcConfig,
+    solana_runtime::accounts_index::{
+        AccountIndex, AccountSecondaryIndexes, AccountSecondaryIndexesIncludeExclude,
+        AccountsIndexConfig,
+    },
     solana_sdk::{
         account::AccountSharedData,
         clock::Slot,
@@ -282,6 +286,15 @@ fn main() {
                      If the ledger already exists then this parameter is silently ignored",
                 ),
         )
+        .arg(
+            Arg::with_name("account_indexes")
+                .long("account-index")
+                .takes_value(true)
+                .multiple(true)
+                .possible_values(&["program-id", "spl-token-owner", "spl-token-mint"])
+                .value_name("INDEX")
+                .help("Enable an accounts index, indexed by the selected account field"),
+        )
         .get_matches();
 
     let output = if matches.is_present("quiet") {
@@ -540,6 +553,8 @@ fn main() {
         None
     };
 
+    let account_indexes = process_account_indexes_debug(&matches);
+
     genesis
         .ledger_path(&ledger_path)
         .tower_storage(tower_storage)
@@ -551,6 +566,7 @@ fn main() {
             enable_rpc_transaction_history: true,
             enable_cpi_and_log_storage: true,
             faucet_addr,
+            account_indexes,
             ..JsonRpcConfig::default()
         })
         .bpf_jit(!matches.is_present("no_bpf_jit"))
@@ -622,4 +638,53 @@ fn remove_directory_contents(ledger_path: &Path) -> Result<(), io::Error> {
         }
     }
     Ok(())
+}
+
+fn process_account_indexes_debug(matches: &ArgMatches) -> AccountSecondaryIndexes {
+    let account_indexes: HashSet<AccountIndex> = matches
+        .values_of("account_indexes")
+        .unwrap_or_default()
+        .map(|value| match value {
+            "program-id" => AccountIndex::ProgramId,
+            "spl-token-mint" => AccountIndex::SplTokenMint,
+            "spl-token-owner" => AccountIndex::SplTokenOwner,
+            _ => unreachable!(),
+        })
+        .collect();
+
+    let account_indexes_include_keys: HashSet<Pubkey> =
+        values_t!(matches, "account_index_include_key", Pubkey)
+            .unwrap_or_default()
+            .iter()
+            .cloned()
+            .collect();
+
+    let account_indexes_exclude_keys: HashSet<Pubkey> =
+        values_t!(matches, "account_index_exclude_key", Pubkey)
+            .unwrap_or_default()
+            .iter()
+            .cloned()
+            .collect();
+
+    let exclude_keys = !account_indexes_exclude_keys.is_empty();
+    let include_keys = !account_indexes_include_keys.is_empty();
+
+    let keys = if !account_indexes.is_empty() && (exclude_keys || include_keys) {
+        let account_indexes_keys = AccountSecondaryIndexesIncludeExclude {
+            exclude: exclude_keys,
+            keys: if exclude_keys {
+                account_indexes_exclude_keys
+            } else {
+                account_indexes_include_keys
+            },
+        };
+        Some(account_indexes_keys)
+    } else {
+        None
+    };
+
+    AccountSecondaryIndexes {
+        keys,
+        indexes: account_indexes,
+    }
 }

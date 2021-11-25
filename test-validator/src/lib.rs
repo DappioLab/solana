@@ -509,6 +509,8 @@ impl TestValidator {
             }
         }
 
+        info!("Debug: rpc_config {:?}", config.rpc_config.clone());
+
         let mut validator_config = ValidatorConfig {
             rpc_addrs: Some((
                 SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), node.info.rpc.port()),
@@ -525,7 +527,8 @@ impl TestValidator {
                 full_snapshot_archive_interval_slots: 100,
                 incremental_snapshot_archive_interval_slots: Slot::MAX,
                 bank_snapshots_dir: ledger_path.join("snapshot"),
-                snapshot_archives_dir: ledger_path.to_path_buf(),
+                snapshot_archives_dir: ledger_path.parent().unwrap().join("snapshots"),
+                // snapshot_archives_dir: ledger_path.to_path_buf(),
                 ..SnapshotConfig::default()
             }),
             enforce_ulimit_nofile: false,
@@ -535,6 +538,7 @@ impl TestValidator {
             rocksdb_compaction_interval: Some(100), // Compact every 100 slots
             max_ledger_shreds: config.max_ledger_shreds,
             no_wait_for_vote_to_start_leader: true,
+            account_indexes: config.rpc_config.account_indexes.clone(),
             ..ValidatorConfig::default()
         };
         if let Some(ref tower_storage) = config.tower_storage {
