@@ -842,7 +842,6 @@ pub fn bank_from_snapshot_archives(
 #[allow(clippy::too_many_arguments)]
 pub fn bank_from_snapshot_archives_debug(
     account_paths: &[PathBuf],
-    frozen_account_pubkeys: &[Pubkey],
     bank_snapshots_dir: impl AsRef<Path>,
     full_snapshot_archive_info: &FullSnapshotArchiveInfo,
     incremental_snapshot_archive_info: Option<&IncrementalSnapshotArchiveInfo>,
@@ -913,7 +912,6 @@ pub fn bank_from_snapshot_archives_debug(
             .map(|unarchive_preparation_result| {
                 &unarchive_preparation_result.unpacked_snapshots_dir_and_version
             }),
-        frozen_account_pubkeys,
         account_paths,
         unpacked_append_vec_map,
         genesis_config,
@@ -1080,7 +1078,6 @@ pub fn bank_from_latest_snapshot_archives_debug(
     bank_snapshots_dir: impl AsRef<Path>,
     snapshot_archives_dir: impl AsRef<Path>,
     account_paths: &[PathBuf],
-    frozen_account_pubkeys: &[Pubkey],
     genesis_config: &GenesisConfig,
     debug_keys: Option<Arc<HashSet<Pubkey>>>,
     additional_builtins: Option<&Builtins>,
@@ -1124,7 +1121,6 @@ pub fn bank_from_latest_snapshot_archives_debug(
 
     let (bank, timings) = bank_from_snapshot_archives_debug(
         account_paths,
-        frozen_account_pubkeys,
         bank_snapshots_dir.as_ref(),
         &full_snapshot_archive_info,
         incremental_snapshot_archive_info.as_ref(),
