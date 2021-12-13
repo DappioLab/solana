@@ -1291,7 +1291,7 @@ impl Bank {
         // genesis needs stakes for all epochs up to the epoch implied by
         //  slot = 0 and genesis configuration
         {
-            let stakes = self.stakes.read().unwrap();
+            let stakes = self.stakes_cache.stakes();
             // for epoch in 0..=self.get_leader_schedule_epoch(self.slot) {
             //     self.epoch_stakes
             //         .insert(epoch, EpochStakes::new(&stakes, epoch));

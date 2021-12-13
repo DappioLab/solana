@@ -96,7 +96,7 @@ else
     solana-net-shaper
     solana-sys-tuner
     solana-validator
-    rbpf-cli
+    # rbpf-cli
   )
 
   # Speed up net.sh deploys by excluding unused binaries
