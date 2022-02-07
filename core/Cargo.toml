@@ -61,8 +61,8 @@ solana-send-transaction-service = {path = "../send-transaction-service", version
 solana-streamer = {path = "../streamer", version = "=1.10.0"}
 solana-transaction-status = {path = "../transaction-status", version = "=1.10.0"}
 solana-vote-program = {path = "../programs/vote", version = "=1.10.0"}
-switchboard-program = "0.1.58"
-switchboard-protos = "0.1.58"
+switchboard-program = "0.2.0"
+switchboard-protos = "0.1.59"
 sys-info = "0.9.1"
 tempfile = "3.2.0"
 thiserror = "1.0"
