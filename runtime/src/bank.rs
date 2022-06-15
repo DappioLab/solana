@@ -1611,7 +1611,7 @@ impl Bank {
         let mut bank = Self::default_with_accounts(accounts);
         bank.ancestors = Ancestors::from(vec![bank.slot()]);
         bank.transaction_debug_keys = debug_keys;
-        bank.cluster_type = Some(genesis_config.cluster_type);
+        bank.cluster_type = Some(ClusterType::Development);
 
         bank.process_genesis_config(genesis_config);
         bank.finish_init(
@@ -1639,6 +1639,35 @@ impl Bank {
         bank
     }
 
+     
+    pub fn update_epoch_schedule_debug(&mut self) {
+        // genesis needs stakes for all epochs up to the epoch implied by
+        //  slot = 0 and genesis configuration
+        {
+            let stakes = self.stakes_cache.stakes();
+            // for epoch in 0..=self.get_leader_schedule_epoch(self.slot) {
+            //     self.epoch_stakes
+            //         .insert(epoch, EpochStakes::new(&stakes, epoch));
+            // }
+
+            let epoch = self.get_leader_schedule_epoch(self.slot);
+            let stakes = self.stakes_cache.stakes().clone();
+            let stakes = Arc::new(StakesEnum::from(stakes));
+            self.epoch_stakes = HashMap::new();
+            self.epoch_stakes
+                .insert(epoch - 1, EpochStakes::new(stakes.clone(), epoch - 1));
+            self.epoch_stakes
+                .insert(epoch, EpochStakes::new(stakes.clone(), epoch));
+
+            // let leader_schedule_epoch = epoch_schedule.get_leader_schedule_epoch(slot);
+            // new.update_epoch_stakes(leader_schedule_epoch);
+            // self.update_stake_history(None);
+        }
+        self.update_clock(None);
+        self.update_rent();
+        self.update_epoch_schedule();
+        self.update_recent_blockhashes();
+    }
     /// Create a new bank that points to an immutable checkpoint of another bank.
     pub fn new_from_parent(parent: &Arc<Bank>, collector_id: &Pubkey, slot: Slot) -> Self {
         Self::_new_from_parent(
@@ -2148,7 +2177,7 @@ impl Bank {
             signature_count: AtomicU64::new(fields.signature_count),
             capitalization: AtomicU64::new(fields.capitalization),
             max_tick_height: fields.max_tick_height,
-            hashes_per_tick: fields.hashes_per_tick,
+            hashes_per_tick: None,
             ticks_per_slot: fields.ticks_per_slot,
             ns_per_slot: fields.ns_per_slot,
             genesis_creation_time: fields.genesis_creation_time,
@@ -2173,7 +2202,7 @@ impl Bank {
             compute_budget: None,
             builtin_feature_transitions: new(),
             rewards: new(),
-            cluster_type: Some(genesis_config.cluster_type),
+            cluster_type: Some(ClusterType::Development),
             lazy_rent_collection: new(),
             rewards_pool_pubkeys: new(),
             cached_executors: RwLock::new(CachedExecutors::new(MAX_CACHED_EXECUTORS, fields.epoch)),
@@ -2201,17 +2230,17 @@ impl Bank {
         // Consider removing from serializable bank state
         // (BankFieldsToSerialize/BankFieldsToDeserialize) and initializing
         // from the passed in genesis_config instead (as new()/new_with_paths() already do)
-        assert_eq!(
-            bank.hashes_per_tick,
-            genesis_config.poh_config.hashes_per_tick
-        );
+        // assert_eq!(
+        //     bank.hashes_per_tick,
+        //     genesis_config.poh_config.hashes_per_tick
+        // );
         assert_eq!(bank.ticks_per_slot, genesis_config.ticks_per_slot);
         assert_eq!(
             bank.ns_per_slot,
             genesis_config.poh_config.target_tick_duration.as_nanos()
                 * genesis_config.ticks_per_slot as u128
         );
-        assert_eq!(bank.genesis_creation_time, genesis_config.creation_time);
+        // assert_eq!(bank.genesis_creation_time, genesis_config.creation_time);
         assert_eq!(bank.max_tick_height, (bank.slot + 1) * bank.ticks_per_slot);
         assert_eq!(
             bank.slots_per_year,
@@ -2392,7 +2421,7 @@ impl Bank {
             .unwrap_or_default()
     }
 
-    fn update_clock(&self, parent_epoch: Option<Epoch>) {
+    pub fn update_clock(&self, parent_epoch: Option<Epoch>) {
         let mut unix_timestamp = self.clock().unix_timestamp;
         let warp_timestamp = self
             .feature_set
@@ -2572,7 +2601,7 @@ impl Bank {
         }
     }
 
-    fn update_rent(&self) {
+    pub fn update_rent(&self) {
         self.update_sysvar_account(&sysvar::rent::id(), |account| {
             create_account(
                 &self.rent_collector.rent,
@@ -2581,7 +2610,7 @@ impl Bank {
         });
     }
 
-    fn update_epoch_schedule(&self) {
+    pub fn update_epoch_schedule(&self) {
         self.update_sysvar_account(&sysvar::epoch_schedule::id(), |account| {
             create_account(
                 self.epoch_schedule(),
@@ -3360,7 +3389,7 @@ impl Bank {
         let mut hash = self.hash.write().unwrap();
         if *hash == Hash::default() {
             // finish up any deferred changes to account state
-            self.collect_rent_eagerly(false);
+            // self.collect_rent_eagerly(false);
             self.collect_fees();
             self.distribute_rent();
             self.update_slot_history();
@@ -3372,7 +3401,9 @@ impl Bank {
             self.rc.accounts.accounts_db.mark_slot_frozen(self.slot());
         }
     }
-
+    pub fn unfreeze(&self) {
+        self.freeze_started.store(false, Relaxed);
+    }
     // dangerous; don't use this; this is only needed for ledger-tool's special command
     pub fn unfreeze_for_ledger_tool(&self) {
         self.freeze_started.store(false, Relaxed);
@@ -3475,7 +3506,7 @@ impl Bank {
             self.fee_rate_governor.lamports_per_signature,
         );
 
-        self.hashes_per_tick = genesis_config.hashes_per_tick();
+        self.hashes_per_tick = None;
         self.ticks_per_slot = genesis_config.ticks_per_slot();
         self.ns_per_slot = genesis_config.ns_per_slot();
         self.genesis_creation_time = genesis_config.creation_time;
@@ -6189,7 +6220,7 @@ impl Bank {
 
     /// Technically this issues (or even burns!) new lamports,
     /// so be extra careful for its usage
-    fn store_account_and_update_capitalization(
+    pub fn store_account_and_update_capitalization(
         &self,
         pubkey: &Pubkey,
         new_account: &AccountSharedData,
@@ -6825,7 +6856,7 @@ impl Bank {
             self.clean_accounts(true, true, last_full_snapshot_slot);
         }
         clean_time.stop();
-
+        let verify = true;
         let mut shrink_all_slots_time = Measure::start("shrink_all_slots");
         if !accounts_db_skip_shrink && self.slot() > 0 {
             info!("shrinking..");
@@ -6836,7 +6867,7 @@ impl Bank {
         let (mut verify, verify_time_us) = if !self.rc.accounts.accounts_db.skip_initial_hash_calc {
             info!("verify_bank_hash..");
             let mut verify_time = Measure::start("verify_bank_hash");
-            let verify = self.verify_bank_hash(test_hash_calculation, false, false);
+            // let verify = self.verify_bank_hash(test_hash_calculation, false, false);
             verify_time.stop();
             (verify, verify_time.as_us())
         } else {
@@ -6856,7 +6887,7 @@ impl Bank {
             ("verify_bank_hash_us", verify_time_us, i64),
             ("verify_hash_us", verify2_time.as_us(), i64),
         );
-
+        
         verify
     }
 

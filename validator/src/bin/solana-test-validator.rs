@@ -1,5 +1,5 @@
 use {
-    clap::{crate_name, value_t, value_t_or_exit, values_t_or_exit, App, Arg},
+    clap::{crate_name, value_t, value_t_or_exit, values_t_or_exit, App, Arg, values_t,ArgMatches},
     crossbeam_channel::unbounded,
     log::*,
     solana_clap_utils::{
@@ -26,6 +26,10 @@ use {
         rpc_port,
         signature::{read_keypair_file, write_keypair_file, Keypair, Signer},
         system_program,
+    },
+    solana_runtime::accounts_index::{
+        AccountIndex, AccountSecondaryIndexes, AccountSecondaryIndexesIncludeExclude,
+        AccountsIndexConfig,
     },
     solana_streamer::socket::SocketAddrSpace,
     solana_test_validator::*,
@@ -377,6 +381,15 @@ fn main() {
                 .takes_value(true)
                 .help("Override the runtime's compute unit limit per transaction")
         )
+        .arg(
+            Arg::with_name("account_indexes")
+                .long("account-index")
+                .takes_value(true)
+                .multiple(true)
+                .possible_values(&["program-id", "spl-token-owner", "spl-token-mint"])
+                .value_name("INDEX")
+                .help("Enable an accounts index, indexed by the selected account field"),
+        )
         .get_matches();
 
     let output = if matches.is_present("quiet") {
@@ -675,7 +688,7 @@ fn main() {
     } else {
         None
     };
-
+    let account_indexes = process_account_indexes_debug(&matches);
     genesis
         .ledger_path(&ledger_path)
         .tower_storage(tower_storage)
@@ -688,6 +701,7 @@ fn main() {
             enable_extended_tx_metadata_storage: true,
             rpc_bigtable_config,
             faucet_addr,
+            account_indexes,
             ..JsonRpcConfig::default_for_test()
         })
         .pubsub_config(PubSubConfig {
@@ -798,4 +812,52 @@ fn remove_directory_contents(ledger_path: &Path) -> Result<(), io::Error> {
         }
     }
     Ok(())
+}
+fn process_account_indexes_debug(matches: &ArgMatches) -> AccountSecondaryIndexes {
+    let account_indexes: HashSet<AccountIndex> = matches
+        .values_of("account_indexes")
+        .unwrap_or_default()
+        .map(|value| match value {
+            "program-id" => AccountIndex::ProgramId,
+            "spl-token-mint" => AccountIndex::SplTokenMint,
+            "spl-token-owner" => AccountIndex::SplTokenOwner,
+            _ => unreachable!(),
+        })
+        .collect();
+
+    let account_indexes_include_keys: HashSet<Pubkey> =
+        values_t!(matches, "account_index_include_key", Pubkey)
+            .unwrap_or_default()
+            .iter()
+            .cloned()
+            .collect();
+
+    let account_indexes_exclude_keys: HashSet<Pubkey> =
+        values_t!(matches, "account_index_exclude_key", Pubkey)
+            .unwrap_or_default()
+            .iter()
+            .cloned()
+            .collect();
+
+    let exclude_keys = !account_indexes_exclude_keys.is_empty();
+    let include_keys = !account_indexes_include_keys.is_empty();
+
+    let keys = if !account_indexes.is_empty() && (exclude_keys || include_keys) {
+        let account_indexes_keys = AccountSecondaryIndexesIncludeExclude {
+            exclude: exclude_keys,
+            keys: if exclude_keys {
+                account_indexes_exclude_keys
+            } else {
+                account_indexes_include_keys
+            },
+        };
+        Some(account_indexes_keys)
+    } else {
+        None
+    };
+
+    AccountSecondaryIndexes {
+        keys,
+        indexes: account_indexes,
+    }
 }
