@@ -536,6 +536,8 @@ impl Validator {
             accounts_update_notifier,
             transaction_notifier,
             Some(poh_timing_point_sender.clone()),
+            &id,
+            vote_account
         );
 
         node.info.wallclock = timestamp();
@@ -1322,6 +1324,8 @@ fn load_blockstore(
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
     transaction_notifier: Option<TransactionNotifierLock>,
     poh_timing_point_sender: Option<PohTimingSender>,
+    validator_identity: &Pubkey,
+    vote_account: &Pubkey,
 ) -> (
     GenesisConfig,
     Arc<RwLock<BankForks>>,
