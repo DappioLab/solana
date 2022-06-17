@@ -7,7 +7,6 @@ use switchboard_protos::protos::{
     aggregator_state::{AggregatorState, RoundResult},
     switchboard_account_types::SwitchboardAccountType,
 };
-use solana_sdk::account_info::AccountInfo;
 pub struct SwitchboardUtil {}
 
 impl SwitchboardUtil {
