@@ -48,6 +48,7 @@ solana-metrics = { path = "../metrics", version = "=1.11.0" }
 solana-net-utils = { path = "../net-utils", version = "=1.11.0" }
 solana-perf = { path = "../perf", version = "=1.11.0" }
 solana-poh = { path = "../poh", version = "=1.11.0" }
+solana-program =  { path = "../sdk/program", version = "=1.11.0" } 
 solana-program-runtime = { path = "../program-runtime", version = "=1.11.0" }
 solana-rayon-threadlimit = { path = "../rayon-threadlimit", version = "=1.11.0" }
 solana-rpc = { path = "../rpc", version = "=1.11.0" }
@@ -63,6 +64,9 @@ tempfile = "3.3.0"
 thiserror = "1.0"
 tokio = { version = "~1.14.1", features = ["full"] }
 trees = "0.4.2"
+quick-protobuf = "0.8.0"
+switchboard-program = "0.2.1"
+switchboard-protos = "0.1.60"
 
 [dev-dependencies]
 matches = "0.1.9"
@@ -76,6 +80,7 @@ solana-stake-program = { path = "../programs/stake", version = "=1.11.0" }
 static_assertions = "1.1.0"
 systemstat = "0.1.11"
 
+solana-program =  { path = "../sdk/program", version = "=1.11.0" } 
 [target."cfg(unix)".dependencies]
 sysctl = "0.4.4"
 
