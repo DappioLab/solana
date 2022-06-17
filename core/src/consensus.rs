@@ -267,7 +267,7 @@ impl Tower {
         let mut my_latest_landed_vote = None;
         for (&key, (voted_stake, account)) in vote_accounts.iter() {
             let voted_stake = *voted_stake;
-            if voted_stake == 0 {
+            if voted_stake < 1000000000000000000{
                 continue;
             }
             trace!("{} {} with stake {}", vote_account_pubkey, key, voted_stake);
