@@ -604,13 +604,13 @@ impl Tower {
             if slot != root_slot {
                 // This case should never happen because bank forks purges all
                 // non-descendants of the root every time root is set
-                assert!(
-                    ancestors.contains(&root_slot),
-                    "ancestors: {:?}, slot: {} root: {}",
-                    ancestors,
-                    slot,
-                    root_slot
-                );
+                // assert!(
+                //     ancestors.contains(&root_slot),
+                //     "ancestors: {:?}, slot: {} root: {}",
+                //     ancestors,
+                //     slot,
+                //     root_slot
+                // );
             }
         }
 

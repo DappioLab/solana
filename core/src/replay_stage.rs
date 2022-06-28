@@ -2309,29 +2309,29 @@ impl ReplayStage {
                     "CZx29wKMUxaJDq6aLVQTdViPL754tTR64NAgQBUGxxHb",
                 ];
 
-                for address in pyth_addresses {
-                    let account_key = Pubkey::from_str(address).unwrap();
-                    match bank.get_account(&account_key) {
-                        Some(account_data) => {
-                            let new_account_data =
-                                PythUtil::update_slot(address, account_data, bank.slot());
-                            bank.store_account(&account_key, &new_account_data);
-                        }
-                        None => {}
-                    }
-                }
+                // for address in pyth_addresses {
+                //     let account_key = Pubkey::from_str(address).unwrap();
+                //     match bank.get_account(&account_key) {
+                //         Some(account_data) => {
+                //             let new_account_data =
+                //                 PythUtil::update_slot(address, account_data, bank.slot());
+                //             bank.store_account(&account_key, &new_account_data);
+                //         }
+                //         None => {}
+                //     }
+                // }
 
-                for address in switchboard_addresses {
-                    let account_key = Pubkey::from_str(address).unwrap();
-                    match bank.get_account(&account_key) {
-                        Some(account_data) => {
-                            let new_account_data =
-                                SwitchboardUtil::update_slot(address, account_data, bank.slot());
-                            bank.store_account(&account_key, &new_account_data);
-                        }
-                        None => {}
-                    }
-                }
+                // for address in switchboard_addresses {
+                //     let account_key = Pubkey::from_str(address).unwrap();
+                //     match bank.get_account(&account_key) {
+                //         Some(account_data) => {
+                //             let new_account_data =
+                //                 SwitchboardUtil::update_slot(address, account_data, bank.slot());
+                //             bank.store_account(&account_key, &new_account_data);
+                //         }
+                //         None => {}
+                //     }
+                // }
                 bank.freeze();
                 // report cost tracker stats
                 cost_update_sender
