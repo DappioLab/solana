@@ -5045,7 +5045,7 @@ impl AccountsDb {
         is_dead: bool,
     ) {
         // Slot purged from cache should not exist in the backing store
-        assert!(self.storage.get_slot_stores(purged_slot).is_none());
+        //assert!(self.storage.get_slot_stores(purged_slot).is_none());
         let num_purged_keys = pubkey_to_slot_set.len();
         let reclaims = self.purge_keys_exact(pubkey_to_slot_set.iter());
         assert_eq!(reclaims.len(), num_purged_keys);
