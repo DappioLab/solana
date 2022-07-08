@@ -703,7 +703,7 @@ impl TestValidator {
                     ..ComputeBudget::default()
                 }),
         };
-
+        info!("Debug: rpc_config {:?}", config.rpc_config.clone());
         let mut validator_config = ValidatorConfig {
             geyser_plugin_config_files: config.geyser_plugin_config_files.clone(),
             accounts_db_caching_enabled: config.accounts_db_caching_enabled,
@@ -723,7 +723,7 @@ impl TestValidator {
                 full_snapshot_archive_interval_slots: 100,
                 incremental_snapshot_archive_interval_slots: Slot::MAX,
                 bank_snapshots_dir: ledger_path.join("snapshot"),
-                full_snapshot_archives_dir: ledger_path.to_path_buf(),
+                full_snapshot_archives_dir: ledger_path.parent().unwrap().join("snapshots"),
                 incremental_snapshot_archives_dir: ledger_path.to_path_buf(),
                 ..SnapshotConfig::default()
             }),
@@ -735,6 +735,7 @@ impl TestValidator {
             no_wait_for_vote_to_start_leader: true,
             accounts_db_config,
             runtime_config,
+            account_indexes: config.rpc_config.account_indexes.clone(),
             ..ValidatorConfig::default_for_test()
         };
         if let Some(ref tower_storage) = config.tower_storage {
