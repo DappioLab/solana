@@ -25,6 +25,8 @@ use {
         unfrozen_gossip_verified_vote_hashes::UnfrozenGossipVerifiedVoteHashes,
         voting_service::VoteOp,
         window_service::DuplicateSlotReceiver,
+        pyth::PythUtil,
+        switchboard::SwitchboardUtil,
     },
     crossbeam_channel::{Receiver, RecvTimeoutError, Sender},
     solana_client::rpc_response::SlotUpdate,
@@ -68,6 +70,7 @@ use {
     std::{
         collections::{HashMap, HashSet},
         result,
+        str::FromStr,
         sync::{
             atomic::{AtomicBool, Ordering},
             Arc, Mutex, RwLock,
@@ -2278,6 +2281,56 @@ impl ReplayStage {
                 let _ = cluster_slots_update_sender.send(vec![*bank_slot]);
                 if let Some(transaction_status_sender) = transaction_status_sender {
                     transaction_status_sender.send_transaction_status_freeze_message(&bank);
+                }
+                let pyth_addresses = vec![
+                    "3vxLXJqLqF3JG5TCbYycbKWRBbCJQLxQmBGCkyqEEefL",
+                    "Gnt27xtC473ZT2Mw5u8wZ68Z3gULkSTb5DuxJy7eJotD",
+                    "GVXRSBjFk6e6J3NbVPXohDJetcTjaeeuykUpbQF8UoMU",
+                    "8Td9VML1nHxQK6M8VVyzsHo32D7VBk72jSpa9U861z2A",
+                    "E4v1BBgoso9s64TQvmyownAVJbhbEPGyzA3qn4n46qj9",
+                    "G4AQpTYKH1Fmg38VpFQbv6uKYQMpRhJzNPALhp7hqdrs",
+                    "AnLf8tVYCM816gmBjiy8n53eXKKEDydT5piYjjQDPgTB",
+                    "8JPJJkmDScpcNmBRKGZuPuG2GYAveQgP3t5gFuMymwvF",
+                    "JBu1AL4obBcCMqKBBxhpWCNUt136ijcuMZLFvTP7iWdB",
+                    "3NBReDRTLKMQEKiLD5tGcx4kXbTf88b7f2xLS9UuGjym",
+                    "H6ARHf6YXhGYeQfUzQNGk6rDNnLBQKrenN712K4AQJEG",
+                ];
+                let switchboard_addresses = vec![
+                    "CppyF6264uKZkGua1brTUa2fSVdMFSCszwzDs76HCuzU",
+                    "QJc2HgGhdtW4e7zjvLB1TGRuwEpTre2agU5Lap2UqYz",
+                    "BAoygKcKN7wk8yKzLD6sxzUQUqLvhBV1rjMA4UJqfZuH",
+                    "Lp3VNoRQi699VZe6u59TV8J38ELEUzxkaisoWsDuJgB",
+                    "5pHX3fd81SpGywzsw4R12L3Xu3qd418h1PcnHpQAiMWA",
+                    "6SqRewrr5f4ycWy7NvLmNgpXJbhwXrtTc1erL9aq2gP3",
+                    "CEPVH2t11KS4CaL3w4YxT9tRiijoGA4VEbnQ97cEpDmQ",
+                    "AdtRGGhmqvom3Jemp5YNrxd9q9unX36BZk1pujkkXijL",
+                    "74YzQPGUT9VnjrBz8MuyDLKgKpbDqGot5xZJvTtMi6Ng",
+                    "5mp8kbkTYwWWCsKSte8rURjTuyinsqBpJ9xAQsewPDD",
+                    "CZx29wKMUxaJDq6aLVQTdViPL754tTR64NAgQBUGxxHb",
+                ];
+
+                for address in pyth_addresses {
+                    let account_key = Pubkey::from_str(address).unwrap();
+                    match bank.get_account(&account_key) {
+                        Some(account_data) => {
+                            let new_account_data =
+                                PythUtil::update_slot(address, account_data, bank.slot());
+                            bank.store_account(&account_key, &new_account_data);
+                        }
+                        None => {}
+                    }
+                }
+
+                for address in switchboard_addresses {
+                    let account_key = Pubkey::from_str(address).unwrap();
+                    match bank.get_account(&account_key) {
+                        Some(account_data) => {
+                            let new_account_data =
+                                SwitchboardUtil::update_slot(address, account_data, bank.slot());
+                            bank.store_account(&account_key, &new_account_data);
+                        }
+                        None => {}
+                    }
                 }
                 bank.freeze();
                 // report cost tracker stats
