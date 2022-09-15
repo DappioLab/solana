@@ -2294,6 +2294,16 @@ impl ReplayStage {
                     "JBu1AL4obBcCMqKBBxhpWCNUt136ijcuMZLFvTP7iWdB",
                     "3NBReDRTLKMQEKiLD5tGcx4kXbTf88b7f2xLS9UuGjym",
                     "H6ARHf6YXhGYeQfUzQNGk6rDNnLBQKrenN712K4AQJEG",
+                    // tulip oracle (same structure with pyth)
+                    "DQAcms41gjYzidRooXRE9GQM1jAauPXDcEpMbVh4FEc7", // SOL
+                    "7FQME1uNK5VVV3f6p3BRPAgMTzaAy2zSMKAvmEyqjQjQ", // mSOL
+                    "5HtZVJNr4GnQuvcbjj6nVX4EQZod8ptazaKSfFvZgRzC", // BTC
+                    "DiMhTRseCyqwmfUb98iC4NbLd91FLBMsLkbxusETiPmR", // ETH
+                    "uo3MK2mD9KogjNLxTWVaB5XqA9Hg4mx4QuRm9SRtKdE", // USDT
+                    "ExzpbWgczTgd8J58BrnESndmzBkRVfc6PhFjSGiQXgAB", // USDC
+                    "83fYH17UZaTCpr6GNcPcS5pZkfxwR1CaEVhYKfkqE8YF", // RAY
+                    "9wrKnvGNaSB3ppbpEYcvWfvtTZq7AAW5J4HYfEEciUVT", // SRM
+                    "ELHiqZR2cYkN2MerbfMSWGy3nwdPuHYiXbiKsQG7Uy9p", // ORCA
                 ];
                 let switchboard_addresses = vec![
                     "CppyF6264uKZkGua1brTUa2fSVdMFSCszwzDs76HCuzU",
