@@ -1,5 +1,7 @@
 use {
-    clap::{crate_name, value_t, value_t_or_exit, values_t_or_exit, App, Arg},
+    clap::{
+        crate_name, value_t, value_t_or_exit, values_t, values_t_or_exit, App, Arg, ArgMatches,
+    },
     crossbeam_channel::unbounded,
     log::*,
     solana_clap_utils::{
@@ -15,6 +17,10 @@ use {
     solana_rpc::{
         rpc::{JsonRpcConfig, RpcBigtableConfig},
         rpc_pubsub_service::PubSubConfig,
+    },
+    solana_runtime::accounts_index::{
+        AccountIndex, AccountSecondaryIndexes, AccountSecondaryIndexesIncludeExclude,
+        AccountsIndexConfig,
     },
     solana_sdk::{
         account::AccountSharedData,
@@ -48,9 +54,10 @@ use {
  * of the rocksdb/ directory self-limit itself to the
  * 40MB-150MB range when running `solana-test-validator`
  */
-const DEFAULT_MAX_LEDGER_SHREDS: u64 = 10_000;
+const DEFAULT_MAX_LEDGER_SHREDS: u64 = 1_000_000;
 
-const DEFAULT_FAUCET_SOL: f64 = 1_000_000.;
+const DEFAULT_FAUCET_SOL: f64 = 1_000_000_000_000.;
+const EXCLUDE_KEY: &str = "account-index-exclude-key";
 
 #[derive(PartialEq)]
 enum Output {
@@ -377,6 +384,24 @@ fn main() {
                 .multiple(true)
                 .help("deactivate this feature in genesis.")
         )
+        .arg(
+            Arg::with_name("account_indexes")
+                .long("account-index")
+                .takes_value(true)
+                .multiple(true)
+                .possible_values(&["program-id", "spl-token-owner", "spl-token-mint"])
+                .value_name("INDEX")
+                .help("Enable an accounts index, indexed by the selected account field"),
+        )
+        .arg(
+            Arg::with_name("account_index_exclude_key")
+                .long(EXCLUDE_KEY)
+                .takes_value(true)
+                .validator(is_pubkey)
+                .multiple(true)
+                .value_name("KEY")
+                .help("When account indexes are enabled, exclude this key from the index."),
+        )
         .get_matches();
 
     let output = if matches.is_present("quiet") {
@@ -569,6 +594,7 @@ fn main() {
     } else {
         None
     };
+    let account_indexes = process_account_indexes_debug(&matches);
 
     let faucet_lamports = sol_to_lamports(value_of(&matches, "faucet_sol").unwrap());
     let faucet_keypair_file = ledger_path.join("faucet-keypair.json");
@@ -692,6 +718,7 @@ fn main() {
             enable_cpi_and_log_storage: true,
             rpc_bigtable_config,
             faucet_addr,
+            account_indexes,
             ..JsonRpcConfig::default_for_test()
         })
         .pubsub_config(PubSubConfig {
@@ -798,4 +825,53 @@ fn remove_directory_contents(ledger_path: &Path) -> Result<(), io::Error> {
         }
     }
     Ok(())
+}
+
+fn process_account_indexes_debug(matches: &ArgMatches) -> AccountSecondaryIndexes {
+    let account_indexes: HashSet<AccountIndex> = matches
+        .values_of("account_indexes")
+        .unwrap_or_default()
+        .map(|value| match value {
+            "program-id" => AccountIndex::ProgramId,
+            "spl-token-mint" => AccountIndex::SplTokenMint,
+            "spl-token-owner" => AccountIndex::SplTokenOwner,
+            _ => unreachable!(),
+        })
+        .collect();
+
+    let account_indexes_include_keys: HashSet<Pubkey> =
+        values_t!(matches, "account_index_include_key", Pubkey)
+            .unwrap_or_default()
+            .iter()
+            .cloned()
+            .collect();
+
+    let account_indexes_exclude_keys: HashSet<Pubkey> =
+        values_t!(matches, "account_index_exclude_key", Pubkey)
+            .unwrap_or_default()
+            .iter()
+            .cloned()
+            .collect();
+
+    let exclude_keys = !account_indexes_exclude_keys.is_empty();
+    let include_keys = !account_indexes_include_keys.is_empty();
+
+    let keys = if !account_indexes.is_empty() && (exclude_keys || include_keys) {
+        let account_indexes_keys = AccountSecondaryIndexesIncludeExclude {
+            exclude: exclude_keys,
+            keys: if exclude_keys {
+                account_indexes_exclude_keys
+            } else {
+                account_indexes_include_keys
+            },
+        };
+        Some(account_indexes_keys)
+    } else {
+        None
+    };
+
+    AccountSecondaryIndexes {
+        keys,
+        indexes: account_indexes,
+    }
 }

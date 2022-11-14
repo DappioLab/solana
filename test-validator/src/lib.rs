@@ -723,10 +723,10 @@ impl TestValidator {
             account_paths: vec![ledger_path.join("accounts")],
             poh_verify: false, // Skip PoH verification of ledger on startup for speed
             snapshot_config: Some(SnapshotConfig {
-                full_snapshot_archive_interval_slots: 100,
+                full_snapshot_archive_interval_slots: 10000,
                 incremental_snapshot_archive_interval_slots: Slot::MAX,
                 bank_snapshots_dir: ledger_path.join("snapshot"),
-                snapshot_archives_dir: ledger_path.to_path_buf(),
+                snapshot_archives_dir: ledger_path.parent().unwrap().join("snapshots"),
                 ..SnapshotConfig::default()
             }),
             enforce_ulimit_nofile: false,
@@ -737,6 +737,7 @@ impl TestValidator {
             max_ledger_shreds: config.max_ledger_shreds,
             no_wait_for_vote_to_start_leader: true,
             accounts_db_config,
+            account_indexes: config.rpc_config.account_indexes.clone(),
             ..ValidatorConfig::default_for_test()
         };
         if let Some(ref tower_storage) = config.tower_storage {

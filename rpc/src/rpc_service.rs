@@ -342,7 +342,7 @@ impl JsonRpcService {
     ) -> Self {
         info!("rpc bound to {:?}", rpc_addr);
         info!("rpc configuration: {:?}", config);
-        let rpc_threads = 1.max(config.rpc_threads);
+        let rpc_threads = 16;
         let rpc_niceness_adj = config.rpc_niceness_adj;
 
         let health = Arc::new(RpcHealth::new(
