@@ -4221,7 +4221,7 @@ impl AccountsDb {
         is_dead: bool,
     ) {
         // Slot purged from cache should not exist in the backing store
-        assert!(self.storage.get_slot_stores(purged_slot).is_none());
+        //assert!(self.storage.get_slot_stores(purged_slot).is_none());
         let num_purged_keys = pubkey_to_slot_set.len();
         let reclaims = self.purge_keys_exact(pubkey_to_slot_set.iter());
         assert_eq!(reclaims.len(), num_purged_keys);
@@ -4855,15 +4855,15 @@ impl AccountsDb {
             );
             // If the above sizing function is correct, just one AppendVec is enough to hold
             // all the data for the slot
-            assert_eq!(
-                self.storage
-                    .get_slot_stores(slot)
-                    .unwrap()
-                    .read()
-                    .unwrap()
-                    .len(),
-                1
-            );
+            // assert_eq!(
+            //     self.storage
+            //         .get_slot_stores(slot)
+            //         .unwrap()
+            //         .read()
+            //         .unwrap()
+            //         .len(),
+            //     1
+            // );
         }
 
         // Remove this slot from the cache, which will to AccountsDb's new readers should look like an

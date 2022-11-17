@@ -528,7 +528,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                         slot_list.remove(slot_list_index)
                     };
                     if previous_slot_entry_was_cached {
-                        assert!(is_cur_account_cached);
+                        // assert!(is_cur_account_cached);
                     } else {
                         reclaims.push(reclaim_item);
                     }
