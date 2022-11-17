@@ -240,13 +240,16 @@ pub fn load_bank_forks_debug(
     };
 
     let (bank_forks, starting_snapshot_hashes) = if snapshot_present {
-        bank_forks_from_snapshot(
+        bank_forks_from_snapshot_debug(
             genesis_config,
             account_paths,
             shrink_paths,
             snapshot_config.as_ref().unwrap(),
             process_options,
             accounts_update_notifier,
+            faucet_pubkey,
+            node_pubkey,
+            vote_account_pubkey,
         )
     } else {
         if process_options
@@ -353,6 +356,84 @@ fn bank_forks_from_snapshot(
             process_options.verify_index,
             process_options.accounts_db_config.clone(),
             accounts_update_notifier,
+        )
+        .expect("Load from snapshot failed");
+
+    if let Some(shrink_paths) = shrink_paths {
+        deserialized_bank.set_shrink_paths(shrink_paths);
+    }
+
+    let full_snapshot_hash = FullSnapshotHash {
+        hash: (
+            full_snapshot_archive_info.slot(),
+            *full_snapshot_archive_info.hash(),
+        ),
+    };
+    let starting_incremental_snapshot_hash =
+        incremental_snapshot_archive_info.map(|incremental_snapshot_archive_info| {
+            IncrementalSnapshotHash {
+                base: full_snapshot_hash.hash,
+                hash: (
+                    incremental_snapshot_archive_info.slot(),
+                    *incremental_snapshot_archive_info.hash(),
+                ),
+            }
+        });
+    let starting_snapshot_hashes = StartingSnapshotHashes {
+        full: full_snapshot_hash,
+        incremental: starting_incremental_snapshot_hash,
+    };
+
+    (
+        BankForks::new(deserialized_bank),
+        Some(starting_snapshot_hashes),
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn bank_forks_from_snapshot_debug(
+    genesis_config: &GenesisConfig,
+    account_paths: Vec<PathBuf>,
+    shrink_paths: Option<Vec<PathBuf>>,
+    snapshot_config: &SnapshotConfig,
+    process_options: &ProcessOptions,
+    accounts_update_notifier: Option<AccountsUpdateNotifier>,
+    faucet_pubkey: &Pubkey,
+    node_pubkey: &Pubkey,
+    vote_account_pubkey: &Pubkey,
+) -> (BankForks, Option<StartingSnapshotHashes>) {
+    // Fail hard here if snapshot fails to load, don't silently continue
+    if account_paths.is_empty() {
+        error!("Account paths not present when booting from snapshot");
+        process::exit(1);
+    }
+
+    // Fail hard here if snapshot fails to load, don't silently continue
+    if account_paths.is_empty() {
+        error!("Account paths not present when booting from snapshot");
+        process::exit(1);
+    }
+
+    let (mut deserialized_bank, full_snapshot_archive_info, incremental_snapshot_archive_info) =
+        snapshot_utils::bank_from_latest_snapshot_archives_debug(
+            &snapshot_config.bank_snapshots_dir,
+            &snapshot_config.snapshot_archives_dir,
+            &account_paths,
+            genesis_config,
+            process_options.debug_keys.clone(),
+            Some(&crate::builtins::get(process_options.bpf_jit)),
+            process_options.account_indexes.clone(),
+            process_options.accounts_db_caching_enabled,
+            process_options.limit_load_slot_count_from_snapshot,
+            process_options.shrink_ratio,
+            process_options.accounts_db_test_hash_calculation,
+            process_options.accounts_db_skip_shrink,
+            process_options.verify_index,
+            process_options.accounts_db_config.clone(),
+            accounts_update_notifier,
+            faucet_pubkey,
+            node_pubkey,
+            vote_account_pubkey,
         )
         .expect("Load from snapshot failed");
 

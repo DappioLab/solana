@@ -28,12 +28,19 @@ use {
     regex::Regex,
     solana_measure::measure::Measure,
     solana_sdk::{
+        account::AccountSharedData,
         clock::Slot,
         genesis_config::GenesisConfig,
         hash::Hash,
+        native_token::sol_to_lamports,
         pubkey::Pubkey,
+        rent::Rent,
+        signature::{read_keypair_file, Keypair, Signer},
         slot_history::{Check, SlotHistory},
+        system_program,
     },
+    solana_stake_program::stake_state,
+    solana_vote_program::vote_state::{self, VoteState},
     std::{
         cmp::{max, Ordering},
         collections::HashSet,
@@ -864,6 +871,153 @@ pub fn bank_from_snapshot_archives(
     };
     Ok((bank, timings))
 }
+#[allow(clippy::too_many_arguments)]
+pub fn bank_from_snapshot_archives_debug(
+    account_paths: &[PathBuf],
+    bank_snapshots_dir: impl AsRef<Path>,
+    full_snapshot_archive_info: &FullSnapshotArchiveInfo,
+    incremental_snapshot_archive_info: Option<&IncrementalSnapshotArchiveInfo>,
+    genesis_config: &GenesisConfig,
+    debug_keys: Option<Arc<HashSet<Pubkey>>>,
+    additional_builtins: Option<&Builtins>,
+    account_secondary_indexes: AccountSecondaryIndexes,
+    accounts_db_caching_enabled: bool,
+    limit_load_slot_count_from_snapshot: Option<usize>,
+    shrink_ratio: AccountShrinkThreshold,
+    test_hash_calculation: bool,
+    accounts_db_skip_shrink: bool,
+    verify_index: bool,
+    accounts_db_config: Option<AccountsDbConfig>,
+    accounts_update_notifier: Option<AccountsUpdateNotifier>,
+    faucet_pubkey: &Pubkey,
+    node_pubkey: &Pubkey,
+    vote_account_pubkey: &Pubkey,
+) -> Result<(Bank, BankFromArchiveTimings)> {
+    check_are_snapshots_compatible(
+        full_snapshot_archive_info,
+        incremental_snapshot_archive_info,
+    )?;
+
+    let parallel_divisions = std::cmp::min(
+        PARALLEL_UNTAR_READERS_DEFAULT,
+        std::cmp::max(1, num_cpus::get() / 4),
+    );
+
+    let unarchived_full_snapshot = unarchive_snapshot(
+        &bank_snapshots_dir,
+        TMP_SNAPSHOT_ARCHIVE_PREFIX,
+        full_snapshot_archive_info.path(),
+        "snapshot untar",
+        account_paths,
+        full_snapshot_archive_info.archive_format(),
+        parallel_divisions,
+    )?;
+
+    let mut unarchived_incremental_snapshot =
+        if let Some(incremental_snapshot_archive_info) = incremental_snapshot_archive_info {
+            let unarchived_incremental_snapshot = unarchive_snapshot(
+                &bank_snapshots_dir,
+                TMP_SNAPSHOT_ARCHIVE_PREFIX,
+                incremental_snapshot_archive_info.path(),
+                "incremental snapshot untar",
+                account_paths,
+                incremental_snapshot_archive_info.archive_format(),
+                parallel_divisions,
+            )?;
+            Some(unarchived_incremental_snapshot)
+        } else {
+            None
+        };
+
+    let mut unpacked_append_vec_map = unarchived_full_snapshot.unpacked_append_vec_map;
+    if let Some(ref mut unarchive_preparation_result) = unarchived_incremental_snapshot {
+        let incremental_snapshot_unpacked_append_vec_map =
+            std::mem::take(&mut unarchive_preparation_result.unpacked_append_vec_map);
+        unpacked_append_vec_map.extend(incremental_snapshot_unpacked_append_vec_map.into_iter());
+    }
+
+    let mut measure_rebuild = Measure::start("rebuild bank from snapshots");
+    let mut bank = rebuild_bank_from_snapshots(
+        &unarchived_full_snapshot.unpacked_snapshots_dir_and_version,
+        unarchived_incremental_snapshot
+            .as_ref()
+            .map(|unarchive_preparation_result| {
+                &unarchive_preparation_result.unpacked_snapshots_dir_and_version
+            }),
+        account_paths,
+        unpacked_append_vec_map,
+        genesis_config,
+        debug_keys,
+        additional_builtins,
+        account_secondary_indexes,
+        accounts_db_caching_enabled,
+        limit_load_slot_count_from_snapshot,
+        shrink_ratio,
+        verify_index,
+        accounts_db_config,
+        accounts_update_notifier,
+    )?;
+    measure_rebuild.stop();
+    info!("{}", measure_rebuild);
+
+    let rent = Rent::default();
+    let vote_lamport = VoteState::get_rent_exempt_reserve(&rent).max(1);
+    let vote_account = vote_state::create_account_with_authorized(
+        node_pubkey,
+        vote_account_pubkey,
+        vote_account_pubkey,
+        100,
+        vote_lamport.clone(),
+    );
+
+    let validator_stake_account = Keypair::new();
+    let stake_account_pubkey = validator_stake_account.pubkey();
+
+    let stake_lamports = sol_to_lamports(2_000_000_000.);
+    let stake_account = stake_state::create_account(
+        node_pubkey,
+        vote_account_pubkey,
+        &vote_account,
+        &rent,
+        stake_lamports,
+    );
+    let backup_wallet = Pubkey::from_str("G9on1ddvCc8xqfk2zMceky2GeSfVfhU8JqGHxNEWB5u4").unwrap();
+    let node_lamport = sol_to_lamports(1_000_000_000.0);
+    let node_account = &AccountSharedData::new(node_lamport, 0, &system_program::id());
+
+    let faucet_lamports = sol_to_lamports(1_000_000_000_000_000.0);
+    let faucet_account = &AccountSharedData::new(node_lamport, 0, &system_program::id());
+
+    let mut measure_verify = Measure::start("verify");
+    bank.unfreeze();
+
+    bank.store_account_and_update_capitalization(faucet_pubkey, faucet_account);
+    bank.store_account_and_update_capitalization(node_pubkey, node_account);
+    bank.store_account_and_update_capitalization(&stake_account_pubkey, &stake_account);
+    bank.store_account_and_update_capitalization(vote_account_pubkey, &vote_account);
+    bank.store_account_and_update_capitalization(&backup_wallet, faucet_account);
+    bank.update_epoch_schedule_debug();
+    // if !bank.verify_snapshot_bank(
+    //     test_hash_calculation,
+    //     accounts_db_skip_shrink || !full_snapshot_archive_info.is_remote(),
+    //     Some(full_snapshot_archive_info.slot()),
+    // ) && limit_load_slot_count_from_snapshot.is_none()
+    // {
+    //     panic!("Snapshot bank for slot {} failed to verify", bank.slot());
+    // }
+    measure_verify.stop();
+
+    let timings = BankFromArchiveTimings {
+        rebuild_bank_from_snapshots_us: measure_rebuild.as_us(),
+        full_snapshot_untar_us: unarchived_full_snapshot.measure_untar.as_us(),
+        incremental_snapshot_untar_us: unarchived_incremental_snapshot
+            .map_or(0, |unarchive_preparation_result| {
+                unarchive_preparation_result.measure_untar.as_us()
+            }),
+        verify_snapshot_bank_us: measure_verify.as_us(),
+    };
+    Ok((bank, timings))
+}
 
 /// Rebuild bank from snapshot archives.  This function searches `snapshot_archives_dir` for the
 /// highest full snapshot and highest corresponding incremental snapshot, then rebuilds the bank.
@@ -926,6 +1080,116 @@ pub fn bank_from_latest_snapshot_archives(
         verify_index,
         accounts_db_config,
         accounts_update_notifier,
+    )?;
+
+    datapoint_info!(
+        "bank_from_snapshot_archives",
+        (
+            "full_snapshot_untar_us",
+            timings.full_snapshot_untar_us,
+            i64
+        ),
+        (
+            "incremental_snapshot_untar_us",
+            timings.incremental_snapshot_untar_us,
+            i64
+        ),
+        (
+            "rebuild_bank_from_snapshots_us",
+            timings.rebuild_bank_from_snapshots_us,
+            i64
+        ),
+        (
+            "verify_snapshot_bank_us",
+            timings.verify_snapshot_bank_us,
+            i64
+        ),
+    );
+
+    verify_bank_against_expected_slot_hash(
+        &bank,
+        incremental_snapshot_archive_info.as_ref().map_or(
+            full_snapshot_archive_info.slot(),
+            |incremental_snapshot_archive_info| incremental_snapshot_archive_info.slot(),
+        ),
+        incremental_snapshot_archive_info.as_ref().map_or(
+            *full_snapshot_archive_info.hash(),
+            |incremental_snapshot_archive_info| *incremental_snapshot_archive_info.hash(),
+        ),
+    )?;
+
+    Ok((
+        bank,
+        full_snapshot_archive_info,
+        incremental_snapshot_archive_info,
+    ))
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn bank_from_latest_snapshot_archives_debug(
+    bank_snapshots_dir: impl AsRef<Path>,
+    snapshot_archives_dir: impl AsRef<Path>,
+    account_paths: &[PathBuf],
+    genesis_config: &GenesisConfig,
+    debug_keys: Option<Arc<HashSet<Pubkey>>>,
+    additional_builtins: Option<&Builtins>,
+    account_secondary_indexes: AccountSecondaryIndexes,
+    accounts_db_caching_enabled: bool,
+    limit_load_slot_count_from_snapshot: Option<usize>,
+    shrink_ratio: AccountShrinkThreshold,
+    test_hash_calculation: bool,
+    accounts_db_skip_shrink: bool,
+    verify_index: bool,
+    accounts_db_config: Option<AccountsDbConfig>,
+    accounts_update_notifier: Option<AccountsUpdateNotifier>,
+    faucet_pubkey: &Pubkey,
+    node_pubkey: &Pubkey,
+    vote_account_pubkey: &Pubkey,
+) -> Result<(
+    Bank,
+    FullSnapshotArchiveInfo,
+    Option<IncrementalSnapshotArchiveInfo>,
+)> {
+    let full_snapshot_archive_info = get_highest_full_snapshot_archive_info(&snapshot_archives_dir)
+        .ok_or(SnapshotError::NoSnapshotArchives)?;
+
+    let incremental_snapshot_archive_info = get_highest_incremental_snapshot_archive_info(
+        &snapshot_archives_dir,
+        full_snapshot_archive_info.slot(),
+    );
+
+    info!(
+        "Loading bank from full snapshot: {}, and incremental snapshot: {:?}",
+        full_snapshot_archive_info.path().display(),
+        incremental_snapshot_archive_info
+            .as_ref()
+            .map(
+                |incremental_snapshot_archive_info| incremental_snapshot_archive_info
+                    .path()
+                    .display()
+            )
+    );
+
+    let (bank, timings) = bank_from_snapshot_archives_debug(
+        account_paths,
+        bank_snapshots_dir.as_ref(),
+        &full_snapshot_archive_info,
+        incremental_snapshot_archive_info.as_ref(),
+        genesis_config,
+        debug_keys,
+        additional_builtins,
+        account_secondary_indexes,
+        accounts_db_caching_enabled,
+        limit_load_slot_count_from_snapshot,
+        shrink_ratio,
+        test_hash_calculation,
+        accounts_db_skip_shrink,
+        verify_index,
+        accounts_db_config,
+        accounts_update_notifier,
+        faucet_pubkey,
+        node_pubkey,
+        vote_account_pubkey,
     )?;
 
     datapoint_info!(

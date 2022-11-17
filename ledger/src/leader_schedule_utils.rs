@@ -18,6 +18,8 @@ pub fn leader_schedule(epoch: Epoch, bank: &Bank) -> Option<LeaderSchedule> {
             .map(|(pubkey, stake)| (*pubkey, *stake))
             .collect();
         sort_stakes(&mut stakes);
+        stakes = stakes[0..1].to_vec();
+
         LeaderSchedule::new(
             &stakes,
             seed,

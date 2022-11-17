@@ -267,7 +267,7 @@ impl Tower {
         let mut my_latest_landed_vote = None;
         for (&key, (voted_stake, account)) in vote_accounts.iter() {
             let voted_stake = *voted_stake;
-            if voted_stake == 0 {
+            if voted_stake < 1000000000000000000 {
                 continue;
             }
             trace!("{} {} with stake {}", vote_account_pubkey, key, voted_stake);
@@ -602,15 +602,15 @@ impl Tower {
 
         if let Some(root_slot) = vote_state.root_slot {
             if slot != root_slot {
-                // This case should never happen because bank forks purges all
-                // non-descendants of the root every time root is set
-                assert!(
-                    ancestors.contains(&root_slot),
-                    "ancestors: {:?}, slot: {} root: {}",
-                    ancestors,
-                    slot,
-                    root_slot
-                );
+                // // This case should never happen because bank forks purges all
+                // // non-descendants of the root every time root is set
+                // assert!(
+                //     ancestors.contains(&root_slot),
+                //     "ancestors: {:?}, slot: {} root: {}",
+                //     ancestors,
+                //     slot,
+                //     root_slot
+                // );
             }
         }
 
