@@ -91,7 +91,7 @@ use {
         hash::Hash,
         pubkey::Pubkey,
         shred_version::compute_shred_version,
-        signature::{Keypair, Signer},
+        signature::{read_keypair_file, Keypair, Signer},
         timing::timestamp,
     },
     solana_send_transaction_service::send_transaction_service,
@@ -520,6 +520,8 @@ impl Validator {
             &start_progress,
             accounts_update_notifier,
             transaction_notifier,
+            &id,
+            vote_account,
         );
 
         let last_full_snapshot_slot = process_blockstore(
@@ -1297,6 +1299,8 @@ fn load_blockstore(
     start_progress: &Arc<RwLock<ValidatorStartProgress>>,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
     transaction_notifier: Option<TransactionNotifierLock>,
+    validator_identity: &Pubkey,
+    vote_account: &Pubkey,
 ) -> (
     GenesisConfig,
     BankForks,
@@ -1386,13 +1390,14 @@ fn load_blockstore(
         } else {
             TransactionHistoryServices::default()
         };
-
+    let faucet_identity =
+        read_keypair_file(ledger_path.join("faucet-keypair.json").to_str().unwrap()).unwrap();
     let (
         mut bank_forks,
         mut leader_schedule_cache,
         starting_snapshot_hashes,
         pruned_banks_receiver,
-    ) = bank_forks_utils::load_bank_forks(
+    ) = bank_forks_utils::load_bank_forks_debug(
         &genesis_config,
         &blockstore,
         config.account_paths.clone(),
@@ -1403,6 +1408,9 @@ fn load_blockstore(
             .cache_block_meta_sender
             .as_ref(),
         accounts_update_notifier,
+        &faucet_identity.pubkey(),
+        validator_identity,
+        vote_account,
     );
 
     leader_schedule_cache.set_fixed_leader_schedule(config.fixed_leader_schedule.clone());
@@ -1499,23 +1507,23 @@ fn maybe_warp_slot(
         );
         leader_schedule_cache.set_root(&bank_forks.root_bank());
 
-        let full_snapshot_archive_info = snapshot_utils::bank_to_full_snapshot_archive(
-            ledger_path,
-            &bank_forks.root_bank(),
-            None,
-            &snapshot_config.snapshot_archives_dir,
-            snapshot_config.archive_format,
-            snapshot_config.maximum_full_snapshot_archives_to_retain,
-            snapshot_config.maximum_incremental_snapshot_archives_to_retain,
-        )
-        .unwrap_or_else(|err| {
-            error!("Unable to create snapshot: {}", err);
-            abort();
-        });
-        info!(
-            "created snapshot: {}",
-            full_snapshot_archive_info.path().display()
-        );
+        // let full_snapshot_archive_info = snapshot_utils::bank_to_full_snapshot_archive(
+        //     ledger_path,
+        //     &bank_forks.root_bank(),
+        //     None,
+        //     &snapshot_config.snapshot_archives_dir,
+        //     snapshot_config.archive_format,
+        //     snapshot_config.maximum_full_snapshot_archives_to_retain,
+        //     snapshot_config.maximum_incremental_snapshot_archives_to_retain,
+        // )
+        // .unwrap_or_else(|err| {
+        //     error!("Unable to create snapshot: {}", err);
+        //     abort();
+        // });
+        // info!(
+        //     "created snapshot: {}",
+        //     full_snapshot_archive_info.path().display()
+        // );
     }
 }
 
