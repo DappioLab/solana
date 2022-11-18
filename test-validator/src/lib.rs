@@ -145,7 +145,7 @@ impl Default for TestValidatorGenesis {
             geyser_plugin_config_files: Option::<Vec<PathBuf>>::default(),
             accounts_db_caching_enabled: bool::default(),
             deactivate_feature_set: HashSet::<Pubkey>::default(),
-            tpu_enable_udp: DEFAULT_TPU_ENABLE_UDP,
+            tpu_enable_udp: true,
         }
     }
 }
@@ -755,7 +755,7 @@ impl TestValidator {
             true, // should_check_duplicate_instance
             config.start_progress.clone(),
             socket_addr_space,
-            DEFAULT_TPU_USE_QUIC,
+            false,
             DEFAULT_TPU_CONNECTION_POOL_SIZE,
             config.tpu_enable_udp,
         ));
